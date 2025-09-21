@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { sendOtp } from '../lib/api';
 
 interface LoginErrors {
   phone?: string;
@@ -57,14 +58,14 @@ const KarmLogin: React.FC = () => {
     setErrors({});
 
     try {
-      // Simulate API call
-      console.log('Sending OTP to:', { userRole, phoneNumber: `+91${phoneNumber}` });
-      
-      // Add your OTP sending logic here
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Handle success - navigate to OTP verification screen
-      navigate('/otp-verification', { state: { phoneNumber: `+91${phoneNumber}` } });
+      const fullPhone = `+91${phoneNumber}`;
+      const result = await sendOtp(fullPhone, 'sms');
+      if (result?.error) {
+        setErrors({ submit: result.error || 'Failed to send OTP. Please try again.' });
+        return;
+      }
+      // Navigate to OTP verification screen with phone context
+      navigate('/otp-verification', { state: { phoneNumber: fullPhone } });
     } catch (error) {
       setErrors({ submit: 'Failed to send OTP. Please try again.' });
     } finally {

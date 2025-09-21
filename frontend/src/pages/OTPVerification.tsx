@@ -1,11 +1,16 @@
 import React, { useState, useRef, useEffect, ForwardedRef } from 'react';
+import { useLocation } from 'react-router-dom';
+import { verifyOtp, sendOtp } from '../lib/api';
 
 interface KarmOTPVerificationProps {
   phoneNumber?: string;
 }
 
 const KarmOTPVerification: React.FC<KarmOTPVerificationProps> = ({ phoneNumber = '+91XXXXXXXXXX' }) => {
-  const [otp, setOtp] = useState<string[]>(['', '', '', '']);
+  const location = useLocation();
+  const initialPhone = (location.state as any)?.phoneNumber || phoneNumber;
+  const [currentPhone] = useState<string>(initialPhone);
+  const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [resendTimer, setResendTimer] = useState<number>(30);
@@ -48,7 +53,7 @@ const KarmOTPVerification: React.FC<KarmOTPVerificationProps> = ({ phoneNumber =
     setError('');
 
     // Auto-focus next input
-    if (value && index < 3) {
+    if (value && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -67,21 +72,21 @@ const KarmOTPVerification: React.FC<KarmOTPVerificationProps> = ({ phoneNumber =
 
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
-    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
-    const newOtp = pastedData.split('').concat(['', '', '', '']).slice(0, 4);
+    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    const newOtp = pastedData.split('').concat(['', '', '', '', '', '']).slice(0, 6);
     setOtp(newOtp);
     
     // Focus the next empty input or last input
     const nextEmptyIndex = newOtp.findIndex(digit => digit === '');
-    const focusIndex = nextEmptyIndex === -1 ? 3 : nextEmptyIndex;
+    const focusIndex = nextEmptyIndex === -1 ? 5 : nextEmptyIndex;
     inputRefs.current[focusIndex]?.focus();
   };
 
   const handleVerifyOtp = async () => {
     const otpString = otp.join('');
     
-    if (otpString.length !== 4) {
-      setError('Please enter the complete 4-digit OTP');
+    if (otpString.length !== 6) {
+      setError('Please enter the complete 6-digit OTP');
       return;
     }
 
@@ -89,12 +94,16 @@ const KarmOTPVerification: React.FC<KarmOTPVerificationProps> = ({ phoneNumber =
     setError('');
 
     try {
-      // Simulate API call for OTP verification
-      console.log('Verifying OTP:', otpString);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Handle success - navigate to dashboard or next screen
-      alert('OTP verified successfully!');
+      if (!currentPhone) {
+        setError('Missing phone number context. Please go back and try again.');
+        return;
+      }
+      const result = await verifyOtp(currentPhone, otpString);
+      if (result?.verified) {
+        alert('OTP verified successfully!');
+      } else {
+        setError(result?.error || 'Invalid OTP. Please try again.');
+      }
     } catch (error) {
       setError('Invalid OTP. Please try again.');
     } finally {
@@ -107,14 +116,17 @@ const KarmOTPVerification: React.FC<KarmOTPVerificationProps> = ({ phoneNumber =
     
     setCanResend(false);
     setResendTimer(30);
-    setOtp(['', '', '', '']);
+    setOtp(['', '', '', '', '', '']);
     setError('');
     
     try {
-      // Simulate API call for resending OTP
-      console.log('Resending OTP to:', phoneNumber);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      if (!currentPhone) {
+        setError('Missing phone number context. Please go back and try again.');
+        setCanResend(true);
+        setResendTimer(0);
+        return;
+      }
+      await sendOtp(currentPhone, 'sms');
       // Focus first input after resend
       inputRefs.current[0]?.focus();
       alert('OTP sent successfully!');
@@ -141,7 +153,7 @@ const KarmOTPVerification: React.FC<KarmOTPVerificationProps> = ({ phoneNumber =
             We've sent a one-time password to your mobile number.
           </p>
           <p className="text-sm text-gray-400 mt-1">
-            {phoneNumber}
+            {currentPhone}
           </p>
         </header>
 
@@ -173,9 +185,9 @@ const KarmOTPVerification: React.FC<KarmOTPVerificationProps> = ({ phoneNumber =
             {/* Verify Button */}
             <button
               type="submit"
-              disabled={isLoading || otp.join('').length !== 4}
+              disabled={isLoading || otp.join('').length !== 6}
               className={`w-full rounded-xl h-14 text-base font-bold flex items-center justify-center transition-all ${
-                isLoading || otp.join('').length !== 4
+                isLoading || otp.join('').length !== 6
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-blue-500 text-white hover:bg-blue-600 active:scale-95'
               }`}
